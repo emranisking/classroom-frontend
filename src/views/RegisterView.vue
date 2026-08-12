@@ -1,0 +1,93 @@
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
+import { apiMessage } from '@/services/http'
+
+const name = ref('')
+const email = ref('')
+const password = ref('')
+const loading = ref(false)
+const error = ref('')
+
+const auth = useAuthStore()
+const router = useRouter()
+const toast = useToastStore()
+
+async function onSubmit() {
+  error.value = ''
+  if (!name.value || !email.value || !password.value) {
+    error.value = 'Fill in all fields to continue.'
+    return
+  }
+  if (password.value.length < 6) {
+    error.value = 'Password should be at least 6 characters.'
+    return
+  }
+  loading.value = true
+  try {
+    await auth.register(name.value, email.value, password.value)
+    toast.success('Account created. Please sign in.')
+    router.push({ name: 'login' })
+  } catch (e) {
+    error.value = apiMessage(e, 'Could not create your account.')
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <svg width="40" height="40" viewBox="0 0 48 48"><rect width="48" height="48" rx="10" fill="#1e8e3e"/><path d="M14 24l7 7 13-13" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h1>Classroom</h1>
+      </div>
+      <p class="auth-subtitle">Create a student account</p>
+
+      <form @submit.prevent="onSubmit">
+        <div class="field">
+          <label for="name">Full name</label>
+          <input id="name" v-model="name" type="text" placeholder="Jane Student" />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" v-model="email" type="email" autocomplete="username" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" v-model="password" type="password" autocomplete="new-password" placeholder="••••••••" />
+        </div>
+        <p v-if="error" class="field-error">{{ error }}</p>
+        <button class="btn btn-primary auth-submit" type="submit" :disabled="loading">
+          {{ loading ? 'Creating account…' : 'Create account' }}
+        </button>
+      </form>
+
+      <p class="auth-switch">
+        Already have an account? <router-link to="/login">Sign in</router-link>
+      </p>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.auth-page {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(160deg, #f8f9fa 0%, #e8f0fe 100%);
+  padding: 16px;
+}
+.auth-card {
+  background: #fff; border-radius: 16px; box-shadow: var(--gc-shadow-lg);
+  padding: 40px 36px; width: 100%; max-width: 400px;
+}
+.auth-brand { display: flex; align-items: center; gap: 12px; }
+.auth-brand h1 { font-family: 'Google Sans', Roboto, sans-serif; font-size: 24px; margin: 0; color: var(--gc-text); }
+.auth-subtitle { color: var(--gc-text-secondary); font-size: 14px; margin: 8px 0 28px; }
+.auth-submit { width: 100%; padding: 12px; margin-top: 6px; font-size: 15px; }
+.auth-switch { text-align: center; font-size: 14px; color: var(--gc-text-secondary); margin-top: 24px; }
+.auth-switch a { color: var(--gc-blue); font-weight: 500; }
+</style>
