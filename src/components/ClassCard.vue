@@ -19,6 +19,7 @@ function initials(name) {
 
 <template>
   <router-link :to="`/classes/${klass.id}`" class="class-card">
+  {{ console.log('Class data:', klass) }}
     <div class="card-banner" :style="{ background: banner }">
       <div class="banner-pattern"></div>
       <div class="banner-text">
@@ -28,7 +29,7 @@ function initials(name) {
       <span class="banner-avatar">{{ initials(klass.teacherName || klass.courseCode) }}</span>
     </div>
     <div class="card-body">
-      <div class="card-teacher">{{ klass.teacherName || 'Unassigned teacher' }}</div>
+      <div class="card-teacher">  {{ klass.teacher?.name || klass.teacherName || klass.instructor || klass.teacherName || 'Unassigned teacher' }}</div>
       <div class="card-meta">
         <span>{{ klass.dayOfWeek }}</span>
         <span v-if="klass.startTime">· {{ klass.startTime }}–{{ klass.endTime }}</span>
