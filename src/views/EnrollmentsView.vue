@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useToastStore } from '@/stores/toast'
-import { EnrollmentsAPI } from '@/services/api'
+import { EnrollmentsAPI, ClassesAPI } from '@/services/api'
 import { apiMessage } from '@/services/http'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import EmptyState from '@/components/EmptyState.vue'
@@ -15,12 +15,56 @@ const droppingId = ref(null)
 async function load() {
   loading.value = true
   try {
+    // Get both requests and enrollments
     const [reqRes, enrRes] = await Promise.all([
       EnrollmentsAPI.myRequests({ pageNumber: 1, pageSize: 50 }),
       EnrollmentsAPI.myEnrollments()
     ])
+    
     requests.value = reqRes.data.data?.items || []
-    enrollments.value = enrRes.data.data || []
+    const enrollmentData = enrRes.data.data || []
+    
+    // Fetch full class details for each enrollment
+    if (enrollmentData.length > 0) {
+      // Option 1: Fetch all classes and map
+      try {
+        const allClassesRes = await ClassesAPI.list({ pageNumber: 1, pageSize: 100 })
+        const allClasses = allClassesRes.data.data?.items || []
+        
+        // Create a map of classId to class data
+        const classMap = {}
+        allClasses.forEach(cls => {
+          classMap[cls.id] = cls
+        })
+        
+        // Map enrollments to full class data
+        enrollments.value = enrollmentData.map(enrollment => {
+          const classData = classMap[enrollment.classId]
+          
+          if (classData) {
+            return {
+              ...enrollment,
+              className: classData.name || enrollment.className,
+              courseCode: classData.courseCode || enrollment.courseCode,
+              teacherName: classData.teacherName || 'Unassigned teacher',
+              dayOfWeek: classData.dayOfWeek || 'TBA',
+              startTime: classData.startTime || null,
+              endTime: classData.endTime || null,
+              capacity: classData.capacity || 0,
+              enrolledCount: classData.enrolledCount || 0
+            }
+          }
+          return enrollment
+        })
+      } catch (error) {
+        console.error('Failed to fetch class details:', error)
+        // If fetching class details fails, use enrollment data as-is
+        enrollments.value = enrollmentData
+      }
+    } else {
+      enrollments.value = []
+    }
+    
   } catch (e) {
     toast.error(apiMessage(e, 'Could not load your enrollments.'))
   } finally {
@@ -92,7 +136,16 @@ onMounted(load)
           <li v-for="e in enrollments" :key="e.enrollmentId" class="req-item">
             <div>
               <div class="req-title">{{ e.courseCode }} — {{ e.className }}</div>
-              <div class="req-meta">{{ e.teacherName || 'Unassigned teacher' }} · {{ e.dayOfWeek }} {{ e.startTime }}–{{ e.endTime }}</div>
+              <div class="req-meta">
+                {{ e.teacherName || 'Unassigned teacher' }} 
+                <span v-if="e.dayOfWeek && e.dayOfWeek !== 'TBA'">
+                  · {{ e.dayOfWeek }} 
+                  <span v-if="e.startTime">{{ e.startTime }}–{{ e.endTime }}</span>
+                </span>
+                <span v-else>
+                  · Schedule not available
+                </span>
+              </div>
             </div>
             <div class="req-right">
               <router-link :to="`/classes/${e.classId}`" class="btn btn-text">View class</router-link>
