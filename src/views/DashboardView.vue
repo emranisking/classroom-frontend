@@ -26,26 +26,70 @@ async function loadDashboard() {
   loading.value = true
   try {
     if (auth.isStudent) {
-      const res = await EnrollmentsAPI.myEnrollments()
-      myEnrollments.value = res.data.data || []
-      classes.value = myEnrollments.value.map(e => ({
-        id: e.classId,
-        name: e.className,
-        courseCode: e.courseCode,
-        teacherName: e.teacherName,
-        dayOfWeek: e.dayOfWeek,
-        startTime: e.startTime,
-        endTime: e.endTime,
-        status: e.status || 'Open',
-        capacity: e.capacity,
-        enrolledCount: e.enrolledCount,
-        courseId: e.courseId
-      }))
+      // Step 1: Get enrollments
+      const enrollmentsRes = await EnrollmentsAPI.myEnrollments()
+      myEnrollments.value = enrollmentsRes.data.data || []
+      
+      // Step 2: Get all classes (students should have permission to list)
+      const allClassesRes = await ClassesAPI.list({ pageNumber: 1, pageSize: 100 })
+      const allClasses = allClassesRes.data.data?.items || []
+      
+      console.log('All classes:', allClasses) // Debug - check if teacher data is here
+      
+      // Step 3: Create a map of classId to class data
+      const classMap = {}
+      allClasses.forEach(cls => {
+        classMap[cls.id] = cls
+      })
+      
+      // Step 4: Map enrollments to full class data
+      classes.value = myEnrollments.value.map(enrollment => {
+        const classData = classMap[enrollment.classId]
+        
+        if (classData) {
+          // Merge class data with enrollment data
+          return {
+            id: classData.id,
+            name: classData.name || enrollment.className,
+            courseCode: classData.courseCode || enrollment.courseCode,
+            courseId: classData.courseId,
+            teacherName: classData.teacherName || 'Unassigned teacher',
+            dayOfWeek: classData.dayOfWeek || 'TBA',
+            startTime: classData.startTime || null,
+            endTime: classData.endTime || null,
+            status: enrollment.status || classData.status || 'Active',
+            capacity: classData.capacity || 0,
+            enrolledCount: classData.enrolledCount || 0,
+            enrolledAt: enrollment.enrolledAt
+          }
+        } else {
+          // Fallback if class not found in the list
+          return {
+            id: enrollment.classId,
+            name: enrollment.className,
+            courseCode: enrollment.courseCode,
+            courseId: enrollment.courseId,
+            teacherName: 'Unassigned teacher',
+            dayOfWeek: 'TBA',
+            startTime: null,
+            endTime: null,
+            status: enrollment.status || 'Active',
+            capacity: 0,
+            enrolledCount: 0,
+            enrolledAt: enrollment.enrolledAt
+          }
+        }
+      })
+      
+      console.log('Final classes with teacher data:', classes.value) // Debug
+      
     } else {
+      // For teachers and admins, just get the class list
       const res = await ClassesAPI.list({ pageNumber: 1, pageSize: 50 })
       classes.value = res.data.data?.items || []
     }
   } catch (e) {
+    console.error('Load error:', e)
     toast.error(apiMessage(e, 'Could not load your classes.'))
   } finally {
     loading.value = false
@@ -71,6 +115,8 @@ async function requestEnroll(klass) {
   try {
     await ClassesAPI.requestEnrollment(klass.id)
     toast.success(`Enrollment requested for ${klass.name}. Check "Enrollments" for status.`)
+    // Reload to update the list
+    await loadDashboard()
   } catch (e) {
     toast.error(apiMessage(e, 'Could not request enrollment.'))
   } finally {
